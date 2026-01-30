@@ -1694,10 +1694,10 @@ renderMap();
 initSpotlightUI();
 
 const SPOTLIGHT = {
-  ukr: { label: "Ukraine", slug: "ukr", iso3: "UKR" },
-  pse: { label: "Gaza (oPt)", slug: "pse", iso3: "PSE" },
-  moz: { label: "Mozambique", slug: "moz", iso3: "MOZ" },
-  yem: { label: "Yemen", slug: "yem", iso3: "YEM" },
+  ukr: { label: "Ukraine", slug: "ukr" },
+  pse: { label: "Gaza (oPt)", slug: "pse" },
+  moz: { label: "Mozambique", slug: "moz" },
+  yem: { label: "Yemen", slug: "yem" },
 };
 
 function initSpotlightUI() {
@@ -1821,16 +1821,7 @@ async function loadSpotlight(countryKey) {
           ).join("") : `<div style="opacity:.7;">(No items)</div>`}
         </div>
       `;
-    // 🔥 Spotlight 선택 시 지도/표 동기화
-  /*
-    if (meta.iso3) {
-    rwSelectedIso3 = meta.iso3;
-    updateActiveCountryBadge();
-    renderDashboardTiles();
-    renderReportTable();
-    renderMap();
-  }
-  */    
+     
   } catch (e) {
     console.error(e);
     if (sectionsEl) sectionsEl.innerHTML = `<div style="color:#ff8080;">Failed: ${(e && e.message) ? e.message : String(e)}</div>`;
