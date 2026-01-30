@@ -1691,112 +1691,138 @@ renderNotes('');
 renderDashboardTiles();
 renderReportTable();
 renderMap();
-loadMostReadUkraine();
+initSpotlightUI();
 
-async function loadMostReadUkraine() {
+const SPOTLIGHT = {
+  ukr: { label: "Ukraine", slug: "ukr" },
+  pse: { label: "Gaza (oPt)", slug: "pse" },
+  moz: { label: "Mozambique", slug: "moz" },
+  yem: { label: "Yemen", slug: "yem" },
+};
+
+function initSpotlightUI() {
+  // ✅ 1) 상단 박스가 들어갈 컨테이너를 잡는다.
+  // 코드에서 box는 보통 document.body나 특정 패널 div일 텐데,
+  // 지금은 가장 안전하게 "기존 ukr 박스" 자리에 렌더하도록 한다.
+
+  // 1) 기존 ukr 박스가 있으면 그걸 쓰고, 없으면 body에 만든다.
+  let host = document.getElementById("rw-spotlight-host");
+  if (!host) {
+    // 기존에 우크라이나 박스가 있던 div가 있으면 그걸 host로 재활용
+    const old = document.getElementById("rw-spotlight-ukr");
+    if (old) {
+      old.id = "rw-spotlight-host";
+      host = old;
+    } else {
+      host = document.createElement("div");
+      host.id = "rw-spotlight-host";
+      host.style.margin = "20px";
+      host.style.padding = "12px";
+      host.style.background = "#111";
+      host.style.border = "1px solid #333";
+      document.body.insertBefore(host, document.body.firstChild);
+    }
+  }
+
+  // ✅ 2) 기본 UI 렌더
+  host.innerHTML = `
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <h3 id="rw-spotlight-title" style="margin:0;">Most Read + Key Content — Ukraine</h3>
+        <select id="rw-spotlight-select"
+          style="background:#0f0f0f;color:#fff;border:1px solid #333;border-radius:8px;padding:6px 10px;">
+          <option value="ukr" selected>Ukraine</option>
+          <option value="pse">Gaza (oPt)</option>
+          <option value="moz">Mozambique</option>
+          <option value="yem">Yemen</option>
+        </select>
+      </div>
+      <a id="rw-spotlight-open" href="https://reliefweb.int/country/ukr#key-content" target="_blank"
+         style="font-size:12px;opacity:.8;">Open on ReliefWeb</a>
+    </div>
+    <div id="rw-spotlight-sections" style="margin-top:10px;"></div>
+  `;
+
+  // ✅ 3) 이벤트 연결 + 첫 로드
+  const sel = document.getElementById("rw-spotlight-select");
+  sel.addEventListener("change", () => loadSpotlight(sel.value));
+  loadSpotlight(sel.value);
+}
+
+async function loadSpotlight(countryKey) {
+  const meta = SPOTLIGHT[countryKey] || SPOTLIGHT.ukr;
+  const url = `https://reliefweb.int/country/${meta.slug}#key-content`;
+
+  const titleEl = document.getElementById("rw-spotlight-title");
+  const openEl = document.getElementById("rw-spotlight-open");
+  const sectionsEl = document.getElementById("rw-spotlight-sections");
+
+  if (titleEl) titleEl.textContent = `Most Read + Key Content — ${meta.label}`;
+  if (openEl) openEl.href = url;
+  if (sectionsEl) sectionsEl.innerHTML = `<div style="opacity:.7;">Loading...</div>`;
+
   try {
-    const url = "https://reliefweb.int/country/ukr#key-content";
     const res = await fetch(proxify(url));
     const html = await res.text();
-
     const doc = new DOMParser().parseFromString(html, "text/html");
 
-    // --- helper: 섹션 제목(h2/h3 등) 텍스트로 "해당 섹션 컨테이너"를 찾기 ---
-    function findSectionRootByHeadingText(text){
+    function findSectionRootByHeadingText(text) {
       const headings = [...doc.querySelectorAll("h1,h2,h3,h4")];
       const h = headings.find(x => (x.textContent || "").trim().toLowerCase() === text.toLowerCase());
-      if(!h) return null;
-
-      // ReliefWeb은 보통 heading을 감싸는 section/article/div가 있음.
-      // 가장 가까운 의미 있는 컨테이너를 잡아봄.
+      if (!h) return null;
       return h.closest("section, article, div") || h.parentElement;
     }
 
-    // --- helper: 특정 root 안에서 report 링크만 뽑기(중복 제거) ---
-    function extractReportLinks(root, limit){
-      if(!root) return [];
+    function extractReportLinks(root, limit) {
+      if (!root) return [];
       const links = [...root.querySelectorAll('a[href*="/report/"]')];
-
       const seen = new Set();
       const out = [];
-      for(const a of links){
+      for (const a of links) {
         const href = a.href;
         const title = (a.textContent || "").trim();
-        if(!href || !title) continue;
-        if(seen.has(href)) continue;
+        if (!href || !title) continue;
+        if (seen.has(href)) continue;
         seen.add(href);
         out.push({ href, title });
-        if(out.length >= limit) break;
+        if (out.length >= limit) break;
       }
       return out;
     }
 
-    // 1) Most Read 섹션만
-    const mostReadRoot = findSectionRootByHeadingText("Most Read");
-    const mostRead = extractReportLinks(mostReadRoot, 5);
+    // ⚠️ ReliefWeb 섹션 제목이 "Key content"로 뜰 수도 있어서 둘 다 체크
+    const mostRoot = findSectionRootByHeadingText("Most Read");
+    const keyRoot = findSectionRootByHeadingText("Key content") || findSectionRootByHeadingText("Key Content");
 
-    // 2) Key Content 섹션만 (없을 수도 있어서 안전하게)
-    const keyContentRoot = findSectionRootByHeadingText("Key Content");
-    const keyContent = extractReportLinks(keyContentRoot, 5);
+    const most = extractReportLinks(mostRoot, 6);
+    const key = extractReportLinks(keyRoot, 6);
 
-    // --- UI 박스 만들기 ---
-    const boxId = "rw-spotlight-ukr";
-    const old = document.getElementById(boxId);
-    if(old) old.remove(); // Fetch 여러 번 눌러도 중복 박스 안 쌓이게
+    // escapeHtml 함수가 기존에 없으면 아래 간단 버전 추가해도 됨
+    const esc = (typeof escapeHtml === "function")
+      ? escapeHtml
+      : (s) => (s || "").replace(/[&<>"']/g, c => ({
+          "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+        }[c]));
 
-    const box = document.createElement("div");
-    box.id = boxId;
-    box.style.margin = "20px";
-    box.style.padding = "12px";
-    box.style.background = "#111";
-    box.style.border = "1px solid #333";
-
-    box.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
-        <h3 style="margin:0;">Most Read + Key Content — Ukraine</h3>
-        <a href="https://reliefweb.int/country/ukr#key-content" target="_blank" style="font-size:12px;opacity:.8;">Open on ReliefWeb</a>
-      </div>
-      <div id="rw-ukr-sections" style="margin-top:10px;"></div>
-    `;
-
-    const sections = box.querySelector("#rw-ukr-sections");
-
-    function renderSection(title, items){
-      const wrap = document.createElement("div");
-      wrap.style.marginTop = "10px";
-
-      const h = document.createElement("div");
-      h.textContent = title;
-      h.style.fontWeight = "700";
-      h.style.marginBottom = "6px";
-      wrap.appendChild(h);
-
-      if(!items.length){
-        const empty = document.createElement("div");
-        empty.textContent = "(No items found — ReliefWeb page structure may have changed)";
-        empty.style.opacity = "0.7";
-        empty.style.fontSize = "12px";
-        wrap.appendChild(empty);
-      } else {
-        items.forEach(it=>{
-          const a = document.createElement("a");
-          a.href = it.href;
-          a.textContent = it.title;
-          a.target = "_blank";
-          a.style.display = "block";
-          a.style.marginBottom = "6px";
-          wrap.appendChild(a);
-        });
-      }
-      return wrap;
+    if (sectionsEl) {
+      sectionsEl.innerHTML = `
+        <div style="margin-top:10px;">
+          <div style="font-weight:700;margin-bottom:6px;">Most Read</div>
+          ${most.length ? most.map(x =>
+            `<a href="${x.href}" target="_blank" style="display:block;margin-bottom:6px;">${esc(x.title)}</a>`
+          ).join("") : `<div style="opacity:.7;">(No items)</div>`}
+        </div>
+        <div style="margin-top:10px;">
+          <div style="font-weight:700;margin-bottom:6px;">Key Content</div>
+          ${key.length ? key.map(x =>
+            `<a href="${x.href}" target="_blank" style="display:block;margin-bottom:6px;">${esc(x.title)}</a>`
+          ).join("") : `<div style="opacity:.7;">(No items)</div>`}
+        </div>
+      `;
     }
-
-    sections.appendChild(renderSection("Most Read", mostRead));
-    sections.appendChild(renderSection("Key Content", keyContent));
-
-    document.body.prepend(box);
-  } catch(e) {
-    console.error("Most Read + Key Content load error:", e);
+  } catch (e) {
+    console.error(e);
+    if (sectionsEl) sectionsEl.innerHTML = `<div style="color:#ff8080;">Failed: ${(e && e.message) ? e.message : String(e)}</div>`;
   }
 }
 
