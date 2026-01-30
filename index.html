@@ -1822,6 +1822,7 @@ async function loadSpotlight(countryKey) {
         </div>
       `;
     // 🔥 Spotlight 선택 시 지도/표 동기화
+  /*
     if (meta.iso3) {
     rwSelectedIso3 = meta.iso3;
     updateActiveCountryBadge();
@@ -1829,7 +1830,7 @@ async function loadSpotlight(countryKey) {
     renderReportTable();
     renderMap();
   }
-      
+  */    
   } catch (e) {
     console.error(e);
     if (sectionsEl) sectionsEl.innerHTML = `<div style="color:#ff8080;">Failed: ${(e && e.message) ? e.message : String(e)}</div>`;
